@@ -41,7 +41,6 @@ class ProjectTest(APITestCase):
             for project, resp_project in zip(projects, response.data):
                 self.assertEqual(project.title, resp_project['title'])
                 self.assertEqual(project.description, resp_project['description'])
-                #self.assertEqual(project.created_date, resp_project['created_date'])
 
     def test_get_project_detail(self):
         project = Project.objects.create(title='TestProject 1', description='abcd')

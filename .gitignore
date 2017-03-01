@@ -1,3 +1,6 @@
 .idea
 
 *.pyc
+
+*.deb
+celerybeat-schedule

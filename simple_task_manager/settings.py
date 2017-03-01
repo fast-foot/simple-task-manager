@@ -135,3 +135,19 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.10/howto/static-files/
 
 STATIC_URL = '/static/'
+
+# CELERY
+BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Europe/Minsk'
+CELERY_IMPORTS = ("api.tasks", )
+
+# EMAIL
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_HOST_USER = 'apikey'
+EMAIL_HOST_PASSWORD = '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'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
