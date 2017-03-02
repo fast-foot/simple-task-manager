@@ -1,4 +1,5 @@
 from typing import List, Dict, Optional, Union
+from django.utils.timezone import datetime
 from django.core.mail import send_mail
 from smtplib import SMTPException
 
@@ -6,7 +7,10 @@ from .models import Task, User
 
 
 def fetch_users_with_assigned_tasks() -> List[User]:
-    assigned_tasks = Task.objects.exclude(user_id=None)
+    assigned_tasks = Task.objects.exclude(user_id__isnull=True)\
+                                 .filter(assigned_date__date=datetime.today(),
+                                         user__email__isnull=False)
+
     users_ids = [task.user_id for task in assigned_tasks]
     users = User.objects.in_bulk(users_ids)
 
@@ -18,6 +22,7 @@ def notify_users(users: List[User], subject: Optional[str]) -> List[Dict[str, Un
 
     try:
         for user in users:
+            print(user)
             message = 'Dear, {username}! Task [{title}] has been assigned to you at {time}.'.format(
                 username=user.username,
                 title=user.task.title,

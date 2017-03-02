@@ -1,32 +1,77 @@
 from django.contrib.auth import get_user_model
-from rest_framework import status, viewsets
+from rest_framework import status
 from rest_framework.exceptions import ParseError
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.request import Request
+from functools import wraps
 
-from api.serializers import UserSerializer, TaskSerializer, ProjectSerializer
 from .config.api_config import api_config
 from .models import Task, Project
+from api.serializers import UserSerializer, TaskSerializer, ProjectSerializer
 
 User = get_user_model()
 
 
-class UserViewSet(viewsets.GenericViewSet):
-    queryset = User.objects.all().order_by('-date_joined')
-    serializer_class = UserSerializer
+def is_manager_or_admin(func):
+    @wraps(func)
+    def decorator(self, *args, **kwargs):
+        if isinstance(args[0], Request):
+            if (args[0].user.role == 'Manager' or args[0].user.is_superuser) and args[0].user.is_active:
+                return func(self, *args, **kwargs)
+            return Response(data={
+                'code': status.HTTP_403_FORBIDDEN,
+                'message': 'Permissions denied'
+            })
+    return decorator
 
-    def list(self, request):
+
+class UserList(APIView):
+    @is_manager_or_admin
+    def get(self, request, format=None):
         users = User.objects.all()
-        serializer = TaskSerializer(users, many=True)
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+
+    @is_manager_or_admin
+    def post(self, request, format=None):
+        serializer = UserSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserDetail(APIView):
+    def get_object(self, pk):
+        try:
+            return User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return
+
+    @is_manager_or_admin
+    def get(self, request, pk, format=None):
+        user = self.get_object(pk)
+        if not user:
+            data = {
+                'code': status.HTTP_404_NOT_FOUND,
+                'message': 'User is not found'
+            }
+            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserSerializer(user)
+
         return Response(serializer.data)
 
 
 class TaskList(APIView):
+    @is_manager_or_admin
     def get(self, request, format=None):
         tasks = Task.objects.all()
         serializer = TaskSerializer(tasks, many=True)
         return Response(serializer.data)
 
+    @is_manager_or_admin
     def post(self, request, format=None):
         serializer = TaskSerializer(data=request.data)
         if serializer.is_valid():
@@ -42,6 +87,7 @@ class TaskDetail(APIView):
         except Task.DoesNotExist:
             return
 
+    @is_manager_or_admin
     def get(self, request, pk, format=None):
         task = self.get_object(pk)
         if not task:
@@ -55,6 +101,7 @@ class TaskDetail(APIView):
 
         return Response(serializer.data)
 
+    @is_manager_or_admin
     def put(self, request, pk, format=None):
         task = self.get_object(pk)
         if not task:
@@ -75,6 +122,7 @@ class TaskDetail(APIView):
             return Response(data=api_config.response_payload.BAD_REQUEST,
                             status=status.HTTP_400_BAD_REQUEST)
 
+    @is_manager_or_admin
     def delete(self, request, pk, format=None):
         task = self.get_object(pk)
         task.delete()
@@ -82,11 +130,13 @@ class TaskDetail(APIView):
 
 
 class ProjectList(APIView):
+    @is_manager_or_admin
     def get(self, request, format=None):
         projects = Project.objects.all()
         serializer = ProjectSerializer(projects, many=True)
         return Response(serializer.data)
 
+    @is_manager_or_admin
     def post(self, request, format=None):
         serializer = ProjectSerializer(data=request.data)
         if serializer.is_valid():
@@ -102,6 +152,7 @@ class ProjectDetail(APIView):
         except Project.DoesNotExist:
             return
 
+    @is_manager_or_admin
     def get(self, request, pk, format=None):
         project = self.get_object(pk)
         if not project:
@@ -115,6 +166,7 @@ class ProjectDetail(APIView):
 
         return Response(serializer.data)
 
+    @is_manager_or_admin
     def put(self, request, pk, format=None):
         project = self.get_object(pk)
         if not project:
@@ -135,6 +187,7 @@ class ProjectDetail(APIView):
             return Response(data=api_config.response_payload.BAD_REQUEST,
                             status=status.HTTP_400_BAD_REQUEST)
 
+    @is_manager_or_admin
     def delete(self, request, pk, format=None):
         project = self.get_object(pk)
         project.delete()
@@ -148,6 +201,7 @@ class ProjectTasks(APIView):
         except Project.DoesNotExist:
             return
 
+    @is_manager_or_admin
     def get(self, request, pk, format=None):
         project = self.get_object(pk)
         if not project:
@@ -157,7 +211,53 @@ class ProjectTasks(APIView):
             }
             return Response(data=data, status=status.HTTP_404_NOT_FOUND)
 
-        tasks = project.task_set.all()
+        tasks = project.tasks.all()
         serializer = TaskSerializer(tasks, many=True)
+
+        return Response(serializer.data)
+
+
+class UserProjects(APIView):
+    def get_object(self, pk):
+        try:
+            return User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return
+
+    @is_manager_or_admin
+    def get(self, request, pk, format=None):
+        user = self.get_object(pk)
+        if not user:
+            data = {
+                'code': status.HTTP_404_NOT_FOUND,
+                'message': 'User is not found'
+            }
+            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
+
+        projects = user.projects.all()
+        serializer = ProjectSerializer(projects, many=True)
+
+        return Response(serializer.data)
+
+
+class ProjectUsers(APIView):
+    def get_object(self, pk):
+        try:
+            return Project.objects.get(pk=pk)
+        except Project.DoesNotExist:
+            return
+
+    @is_manager_or_admin
+    def get(self, request, pk, format=None):
+        project = self.get_object(pk)
+        if not project:
+            data = {
+                'code': status.HTTP_404_NOT_FOUND,
+                'message': 'Project is not found'
+            }
+            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
+
+        users = project.users.all()
+        serializer = UserSerializer(users, many=True)
 
         return Response(serializer.data)

@@ -47,7 +47,7 @@ SITE_ID = 1
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAdminUser',
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'TEST_REQUEST_DEFAULT_FORMAT': 'json'
 }
@@ -145,7 +145,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Minsk'
 CELERY_IMPORTS = ("api.tasks", )
 
-# EMAIL
+
 EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_HOST_USER = 'apikey'
 EMAIL_HOST_PASSWORD = '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'

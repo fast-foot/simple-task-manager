@@ -14,24 +14,6 @@ class TaskTest(APITestCase):
         self.superuser = User.objects.create_superuser('alex', 'alex@mail.com', 'pass')
         self.client.login(username='alex', password='pass')
 
-    def test_create_task(self):
-        with mock.patch('django.utils.timezone.now') as mock_now:
-            mock_now.return_value = mocked_datetime
-            project = Project.objects.create(title='TestProject 1')
-            data = {
-                'project': project.id,
-                'title': 'TestTask',
-                'description': 'Test ...',
-                'created_date': mocked_datetime,
-                'due_date': None
-            }
-
-            response = self.client.post(reverse(TASK_LIST_VIEW_NAME), data)
-
-            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-            data['id'] = 1
-            self.assertEqual(dict(response.data), data)
-
     def test_get_tasks(self):
         project = Project.objects.create(title='TestProject 1')
         tasks = [Task.objects.create(title='TestTask' + str(i),
@@ -59,22 +41,6 @@ class TaskTest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(task.title, response.data['title'])
         self.assertEqual(task.description, response.data['description'])
-
-    def test_update_task(self):
-        project = Project.objects.create(title='TestProject 1')
-        task = Task.objects.create(title='TestTask 1', project_id=project.id)
-        data = {
-            'project': project.id,
-            'title': 'NewTask',
-            'description': '<Task>'
-        }
-
-        response = self.client.put(reverse(TASK_DETAIL_VIEW_NAME, args=[task.id]), data=data)
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['title'], data['title'])
-        self.assertEqual(response.data['description'], data['description'])
-        self.assertEqual(response.data['project'], data['project'])
 
     def test_delete_project(self):
         project = Project.objects.create(title='TestProject 1')
