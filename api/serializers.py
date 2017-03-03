@@ -27,7 +27,7 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
-    user = UserRoleSerializer()
+    user = UserSerializer()
 
     class Meta:
         model = Task

@@ -5,6 +5,8 @@ from smtplib import SMTPException
 
 from .models import Task, User
 
+FROM_EMAIL = 'alex.chudovsky@gmail.com'
+
 
 def fetch_users_with_assigned_tasks() -> List[User]:
     assigned_tasks = Task.objects.exclude(user_id__isnull=True)\
@@ -22,7 +24,6 @@ def notify_users(users: List[User], subject: Optional[str]) -> List[Dict[str, Un
 
     try:
         for user in users:
-            print(user)
             message = 'Dear, {username}! Task [{title}] has been assigned to you at {time}.'.format(
                 username=user.username,
                 title=user.task.title,
@@ -32,8 +33,8 @@ def notify_users(users: List[User], subject: Optional[str]) -> List[Dict[str, Un
             send_mail(
                 subject=subject,
                 message=message,
-                from_email='alex.chudovsky@gmail.com',
-                recipient_list=['alex.chudovsky@gmail.com'],
+                from_email=FROM_EMAIL,
+                recipient_list=[user.email],
                 fail_silently=False
             )
 
