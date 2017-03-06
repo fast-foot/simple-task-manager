@@ -1,9 +1,11 @@
 from typing import List, Dict, Optional, Union
 from django.utils.timezone import datetime
 from django.core.mail import send_mail
+from rest_framework.exceptions import APIException
+from rest_framework.views import status
 from smtplib import SMTPException
 
-from .models import Task, User
+from api.models import Task, User
 
 FROM_EMAIL = 'alex.chudovsky@gmail.com'
 
@@ -27,7 +29,7 @@ def notify_users(users: List[User], subject: Optional[str]) -> List[Dict[str, Un
             message = 'Dear, {username}! Task [{title}] has been assigned to you at {time}.'.format(
                 username=user.username,
                 title=user.task.title,
-                time=user.task.created_date.strftime('%I:%M %p on %B %d, %Y')
+                time=user.task.assigned_date.strftime('%I:%M %p on %B %d, %Y')
             )
 
             send_mail(
@@ -49,3 +51,4 @@ def notify_users(users: List[User], subject: Optional[str]) -> List[Dict[str, Un
         print(str(e))
 
     return notified_users
+

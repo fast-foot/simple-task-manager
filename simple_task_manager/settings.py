@@ -39,17 +39,30 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django.contrib.sites',
     'rest_framework',
+    'oauth2_provider',
 ]
 
-SITE_ID = 1
+OAUTH2_PROVIDER = {
+    'SCOPES': {
+        'read': 'Read Access',
+        'write': 'Write Access'
+    },
+    'DEFAULT_SCOPES': {
+        'read': 'Read Access'
+    },
+    'ACCESS_TOKEN_EXPIRE_SECONDS': 36000,
+}
 
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'oauth2_provider.ext.rest_framework.OAuth2Authentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    ],
-    'TEST_REQUEST_DEFAULT_FORMAT': 'json'
+    ),
+    'TEST_REQUEST_DEFAULT_FORMAT': 'json',
+    'EXCEPTION_HANDLER': 'api.utils.exceptions.custom_exception_handler'
 }
 
 MIDDLEWARE = [
@@ -107,6 +120,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 3,
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',

@@ -1,263 +1,198 @@
 from django.contrib.auth import get_user_model
 from rest_framework import status
-from rest_framework.exceptions import ParseError
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.request import Request
-from functools import wraps
+from oauth2_provider.ext.rest_framework import TokenHasScope, TokenHasReadWriteScope
 
-from .config.api_config import api_config
-from .models import Task, Project
-from api.serializers import UserSerializer, TaskSerializer, ProjectSerializer
+from api.models import Task, Project, UserRole
+from api.utils.exceptions import ResourceNotFoundException
+from api.serializers import UserSerializer, UserRoleSerializer, TaskSerializer, \
+                            ProjectSerializer, ProjectTasksSerializer
 
 User = get_user_model()
 
 
-def is_manager_or_admin(func):
-    @wraps(func)
-    def decorator(self, *args, **kwargs):
-        if isinstance(args[0], Request):
-            if (args[0].user.role == 'Manager' or args[0].user.is_superuser) and args[0].user.is_active:
-                return func(self, *args, **kwargs)
-            return Response(data={
-                'code': status.HTTP_403_FORBIDDEN,
-                'message': 'Permissions denied'
-            })
-    return decorator
+def get_object(_model, pk):
+    try:
+        return _model.objects.get(pk=pk)
+    except _model.DoesNotExist:
+        raise ResourceNotFoundException
 
 
 class UserList(APIView):
-    @is_manager_or_admin
+    permission_classes = [TokenHasReadWriteScope]
+
     def get(self, request, format=None):
-        users = User.objects.all()
+        users = User.objects.order_by('-date_joined')
         serializer = UserSerializer(users, many=True)
         return Response(serializer.data)
 
-    @is_manager_or_admin
     def post(self, request, format=None):
         serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserDetail(APIView):
-    def get_object(self, pk):
-        try:
-            return User.objects.get(pk=pk)
-        except User.DoesNotExist:
-            return
+    permission_classes = [TokenHasReadWriteScope]
 
-    @is_manager_or_admin
     def get(self, request, pk, format=None):
-        user = self.get_object(pk)
-        if not user:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'User is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
+        try:
+            user = get_object(User, pk)
+            serializer = UserSerializer(user)
+            return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
 
-        serializer = UserSerializer(user)
+    def put(self, request, pk, format=None):
+        try:
+            user = get_object(User, pk)
+            serializer = UserSerializer(user, data=request.data, partial=True)
+            if serializer.is_valid(raise_exception=True):
+                serializer.save()
+                return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
 
+    def delete(self, request, pk, format=None):
+        user = get_object(User, pk)
+        user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class RoleList(APIView):
+    permission_classes = [TokenHasScope]
+    required_scopes = ['read']
+
+    def get(self, request, format=None):
+        user_roles = UserRole.objects.all()
+        serializer = UserRoleSerializer(user_roles, many=True)
         return Response(serializer.data)
 
 
 class TaskList(APIView):
-    @is_manager_or_admin
+    permission_classes = [TokenHasReadWriteScope]
+
     def get(self, request, format=None):
-        tasks = Task.objects.all()
+        tasks = Task.objects.order_by('-created_date')
         serializer = TaskSerializer(tasks, many=True)
         return Response(serializer.data)
 
-    @is_manager_or_admin
     def post(self, request, format=None):
         serializer = TaskSerializer(data=request.data)
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class TaskDetail(APIView):
-    def get_object(self, pk):
-        try:
-            return Task.objects.get(pk=pk)
-        except Task.DoesNotExist:
-            return
+    permission_classes = [TokenHasReadWriteScope]
+    serializer_class = TaskSerializer
 
-    @is_manager_or_admin
     def get(self, request, pk, format=None):
-        task = self.get_object(pk)
-        if not task:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'Task is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = TaskSerializer(task)
-
-        return Response(serializer.data)
-
-    @is_manager_or_admin
-    def put(self, request, pk, format=None):
-        task = self.get_object(pk)
-        if not task:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'Task is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
         try:
-            serializer = TaskSerializer(task, data=request.data)
-            if serializer.is_valid():
+            task = get_object(Task, pk)
+            serializer = TaskSerializer(task)
+            return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
+
+    def put(self, request, pk, format=None):
+        try:
+            task = get_object(Task, pk)
+            serializer = TaskSerializer(task, data=request.data, partial=True)
+            if serializer.is_valid(raise_exception=True):
                 serializer.save()
                 return Response(serializer.data)
-            return Response(data=api_config.response_payload.BAD_REQUEST,
-                            status=status.HTTP_400_BAD_REQUEST)
-        except ParseError:
-            return Response(data=api_config.response_payload.BAD_REQUEST,
-                            status=status.HTTP_400_BAD_REQUEST)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
 
-    @is_manager_or_admin
     def delete(self, request, pk, format=None):
-        task = self.get_object(pk)
+        task = get_object(Task, pk)
         task.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjectList(APIView):
-    @is_manager_or_admin
+    permission_classes = [TokenHasReadWriteScope]
+
     def get(self, request, format=None):
-        projects = Project.objects.all()
+        projects = Project.objects.order_by('-created_date')
         serializer = ProjectSerializer(projects, many=True)
         return Response(serializer.data)
 
-    @is_manager_or_admin
     def post(self, request, format=None):
         serializer = ProjectSerializer(data=request.data)
-        if serializer.is_valid():
+        if serializer.is_valid(raise_exception=True):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ProjectDetail(APIView):
-    def get_object(self, pk):
-        try:
-            return Project.objects.get(pk=pk)
-        except Project.DoesNotExist:
-            return
+    permission_classes = [TokenHasReadWriteScope]
 
-    @is_manager_or_admin
     def get(self, request, pk, format=None):
-        project = self.get_object(pk)
-        if not project:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'Project is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = ProjectSerializer(project)
-
-        return Response(serializer.data)
-
-    @is_manager_or_admin
-    def put(self, request, pk, format=None):
-        project = self.get_object(pk)
-        if not project:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'Project is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
         try:
-            serializer = ProjectSerializer(project, data=request.data)
-            if serializer.is_valid():
+            project = get_object(Project, pk)
+            serializer = ProjectSerializer(project)
+            return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
+
+    def put(self, request, pk, format=None):
+        try:
+            project = get_object(Project, pk)
+            serializer = ProjectSerializer(project, data=request.data, partial=True)
+            if serializer.is_valid(raise_exception=True):
                 serializer.save()
                 return Response(serializer.data)
-            return Response(data=api_config.response_payload.BAD_REQUEST,
-                            status=status.HTTP_400_BAD_REQUEST)
-        except ParseError:
-            return Response(data=api_config.response_payload.BAD_REQUEST,
-                            status=status.HTTP_400_BAD_REQUEST)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
 
-    @is_manager_or_admin
     def delete(self, request, pk, format=None):
-        project = self.get_object(pk)
+        project = get_object(Project, pk)
         project.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ProjectTasks(APIView):
-    def get_object(self, pk):
-        try:
-            return Project.objects.get(pk=pk)
-        except Project.DoesNotExist:
-            return
+    permission_classes = [TokenHasScope]
+    required_scopes = ['read']
 
-    @is_manager_or_admin
     def get(self, request, pk, format=None):
-        project = self.get_object(pk)
-        if not project:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'Project is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        tasks = project.tasks.all()
-        serializer = TaskSerializer(tasks, many=True)
-
-        return Response(serializer.data)
+        try:
+            project = get_object(Project, pk)
+            tasks = project.tasks.order_by('-created_date')
+            serializer = ProjectTasksSerializer(tasks, many=True)
+            return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
 
 
 class UserProjects(APIView):
-    def get_object(self, pk):
-        try:
-            return User.objects.get(pk=pk)
-        except User.DoesNotExist:
-            return
+    permission_classes = [TokenHasScope]
+    required_scopes = ['read']
 
-    @is_manager_or_admin
     def get(self, request, pk, format=None):
-        user = self.get_object(pk)
-        if not user:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'User is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        projects = user.projects.all()
-        serializer = ProjectSerializer(projects, many=True)
-
-        return Response(serializer.data)
+        try:
+            user = get_object(User, pk)
+            projects = user.projects.order_by('-created_date')
+            serializer = ProjectSerializer(projects, many=True)
+            return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)
 
 
 class ProjectUsers(APIView):
-    def get_object(self, pk):
-        try:
-            return Project.objects.get(pk=pk)
-        except Project.DoesNotExist:
-            return
+    permission_classes = [TokenHasScope]
+    required_scopes = ['read']
 
-    @is_manager_or_admin
     def get(self, request, pk, format=None):
-        project = self.get_object(pk)
-        if not project:
-            data = {
-                'code': status.HTTP_404_NOT_FOUND,
-                'message': 'Project is not found'
-            }
-            return Response(data=data, status=status.HTTP_404_NOT_FOUND)
-
-        users = project.users.all()
-        serializer = UserSerializer(users, many=True)
-
-        return Response(serializer.data)
+        try:
+            project = get_object(Project, pk)
+            users = project.users.order_by('-date_joined')
+            serializer = UserSerializer(users, many=True)
+            return Response(serializer.data)
+        except ResourceNotFoundException as exc:
+            return Response(data=exc.data, status=exc.status_code)

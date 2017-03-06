@@ -21,7 +21,7 @@ class User(AbstractUser):
 
 
 class Project(models.Model):
-    title = models.CharField(max_length=100)
+    title = models.CharField(max_length=100, unique=True)
     description = models.TextField(max_length=2000, blank=True)
     users = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='projects', blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
@@ -32,11 +32,12 @@ class Project(models.Model):
 
 class Task(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name='task',
-                                on_delete=models.CASCADE, null=True, blank=True)
-    title = models.CharField(max_length=100)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='task',
+                             on_delete=models.CASCADE, null=True, blank=True)
+    title = models.CharField(max_length=100, unique=True)
     description = models.TextField(max_length=1000, blank=True)
     created_date = models.DateTimeField(auto_now_add=True)
+    assigned_date = models.DateTimeField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
